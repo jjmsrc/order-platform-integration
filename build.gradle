@@ -36,6 +36,12 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // XML
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml'
+
+    // SFTP
+    implementation 'org.springframework.integration:spring-integration-sftp'
 }
 
 tasks.named('test') {

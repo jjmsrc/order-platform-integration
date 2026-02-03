@@ -4,6 +4,8 @@ import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -11,6 +13,8 @@ import lombok.NoArgsConstructor;
 @Table(name = "ORDER_TB")
 @Getter
 @NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class OrderEntity {
 
 	@EmbeddedId
@@ -37,16 +41,4 @@ public class OrderEntity {
 	@Column(name = "STATUS", length = 100)
 	private String status;
 
-	public OrderEntity(OrderPk id, String userId, String itemId,
-		String name, String address, String itemName,
-		String price, String status) {
-		this.id = id;
-		this.userId = userId;
-		this.itemId = itemId;
-		this.name = name;
-		this.address = address;
-		this.itemName = itemName;
-		this.price = price;
-		this.status = status;
-	}
 }

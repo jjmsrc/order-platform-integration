@@ -7,6 +7,7 @@ public enum ErrorCode {
 	// 400
 	INVALID_REQUEST(HttpStatus.BAD_REQUEST, "잘못된 요청입니다."),
 	VALIDATION_ERROR(HttpStatus.BAD_REQUEST, "요청 값이 올바르지 않습니다."),
+	ORDER_MAX_COUNT_ERROR(HttpStatus.BAD_REQUEST, "주문 내역의 개수가 초과하였습니다."),
 
 	// 404
 	EXTENSION_NOT_FOUND(HttpStatus.NOT_FOUND, "잘못된 요청입니다."),
