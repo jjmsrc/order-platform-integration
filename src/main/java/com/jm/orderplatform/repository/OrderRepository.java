@@ -13,4 +13,7 @@ public interface OrderRepository extends JpaRepository<OrderEntity, OrderPk> {
 
 	@Query("select o from OrderEntity o order by o.id.orderId desc")
 	List<OrderEntity> findLatestOrder(Pageable pageable);
+
+	List<OrderEntity> findAllById_ApplicantKeyAndStatus(String applicantKey, String status);
+
 }

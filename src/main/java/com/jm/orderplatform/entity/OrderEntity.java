@@ -41,4 +41,8 @@ public class OrderEntity {
 	@Column(name = "STATUS", length = 100)
 	private String status;
 
+	public void updateStatus(String status) {
+		this.status = status;
+	}
+
 }

@@ -4,6 +4,8 @@ import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -11,6 +13,8 @@ import lombok.NoArgsConstructor;
 @Table(name = "SHIPMENT_TB")
 @Getter
 @NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class ShipmentEntity {
 
 	@EmbeddedId
@@ -25,10 +29,4 @@ public class ShipmentEntity {
 	@Column(name = "ADDRESS", length = 100)
 	private String address;
 
-	public ShipmentEntity(ShipmentPk id, String orderId, String itemId, String address) {
-		this.id = id;
-		this.orderId = orderId;
-		this.itemId = itemId;
-		this.address = address;
-	}
 }
