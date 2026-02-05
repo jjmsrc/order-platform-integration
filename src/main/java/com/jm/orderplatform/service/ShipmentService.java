@@ -29,11 +29,11 @@ public class ShipmentService {
 	@Transactional
 	public void updateShipmentStatus() {
 
+		log.info("운송 회사 DB 적재 요청 시작");
+
 		// 미전송 주문 목록 조회
 
 		List<OrderEntity> orderEntityList = orderRepository.findAllById_ApplicantKeyAndStatus(APPLICANT_KEY, "N");
-
-		log.debug(orderEntityList.toString());
 
 		// 운송 DB에 데이터 저장
 
@@ -56,6 +56,8 @@ public class ShipmentService {
 		for (OrderEntity orderEntity : orderEntityList) {
 			orderEntity.updateStatus("Y");
 		}
+
+		log.info("운송 회사 DB 적재 요청 성공 - 건수: {}", orderEntityList.size());
 
 	}
 
