@@ -237,7 +237,7 @@ public class OrderService {
 	private void sendSftp(String data) {
 		String timestamp = LocalDateTime.now()
 			.format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
-		String remoteFileName = "INSPIEN_김지민_" + timestamp + ".txt";
+		String remoteFileName = "INSPIEN_KIMJIMIN_" + timestamp + ".txt";
 
 		try {
 
