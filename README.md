@@ -48,6 +48,8 @@
     └─ 적재 성공 결과 저장
 ```
 
+<img width="1066" height="526" alt="image" src="https://github.com/user-attachments/assets/96224cfd-c6cb-4860-b18d-1af246a7bf79" />
+
 ## TODO
 
 ### 시나리오 1
