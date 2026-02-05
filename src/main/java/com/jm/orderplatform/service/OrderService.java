@@ -1,5 +1,6 @@
 package com.jm.orderplatform.service;
 
+import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -10,6 +11,10 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import javax.xml.stream.XMLInputFactory;
+import javax.xml.stream.XMLStreamConstants;
+import javax.xml.stream.XMLStreamReader;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.integration.file.FileHeaders;
@@ -19,8 +24,6 @@ import org.springframework.integration.support.MessageBuilder;
 import org.springframework.messaging.Message;
 import org.springframework.stereotype.Service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import com.jm.orderplatform.controller.dto.HeaderDto;
 import com.jm.orderplatform.controller.dto.ItemDto;
 import com.jm.orderplatform.controller.dto.OrderRequestDto;
@@ -53,8 +56,9 @@ public class OrderService {
 
 		log.info("주문 적재 요청 시작");
 
-		// 요청 메시지 검증
-		OrderRequestDto orderRequestDto = validateOrder(requestBody);
+		// 요청 메시지 파싱 및 검증
+		OrderRequestDto orderRequestDto = parseOrderXml(requestBody);
+		validateOrderRequest(orderRequestDto);
 
 		// 엔티티 데이터 변환
 		List<OrderEntity> orderEntityList = makeOrderEntityList(orderRequestDto);
@@ -69,15 +73,86 @@ public class OrderService {
 
 	}
 
-	private OrderRequestDto validateOrder(String requestBody) {
-		XmlMapper xmlMapper = new XmlMapper();
-		OrderRequestDto orderRequestDto;
+	public static OrderRequestDto parseOrderXml(String xml) {
+
+		XMLInputFactory factory = XMLInputFactory.newInstance();
+
+		List<HeaderDto> headers = new ArrayList<>();
+		List<ItemDto> items = new ArrayList<>();
+
 		try {
-			orderRequestDto = xmlMapper.readValue(requestBody, OrderRequestDto.class);
-		} catch (JsonProcessingException e) {
+			XMLStreamReader reader =
+				factory.createXMLStreamReader(new StringReader(xml));
+
+			HeaderDto currentHeader = null;
+			ItemDto currentItem = null;
+			String currentTag = null;
+
+			while (reader.hasNext()) {
+				int event = reader.next();
+
+				if (event == XMLStreamConstants.START_ELEMENT) {
+					currentTag = reader.getLocalName();
+
+					if ("HEADER".equals(currentTag)) {
+						currentHeader = new HeaderDto();
+					}
+					if ("ITEM".equals(currentTag)) {
+						currentItem = new ItemDto();
+					}
+				}
+
+				if (event == XMLStreamConstants.CHARACTERS) {
+					String value = reader.getText().trim();
+					if (value.isEmpty())
+						continue;
+
+					if (currentTag == null)
+						throw new CustomException(ErrorCode.INVALID_XML_ERROR);
+
+					if (currentHeader != null) {
+						switch (currentTag) {
+							case "USER_ID" -> currentHeader.setUserId(value);
+							case "NAME" -> currentHeader.setName(value);
+							case "ADDRESS" -> currentHeader.setAddress(value);
+							case "STATUS" -> currentHeader.setStatus(value);
+						}
+					}
+
+					if (currentItem != null) {
+						switch (currentTag) {
+							case "USER_ID" -> currentItem.setUserId(value);
+							case "ITEM_ID" -> currentItem.setItemId(value);
+							case "ITEM_NAME" -> currentItem.setItemName(value);
+							case "PRICE" -> currentItem.setPrice(value);
+						}
+					}
+				}
+
+				if (event == XMLStreamConstants.END_ELEMENT) {
+					if ("HEADER".equals(reader.getLocalName())) {
+						headers.add(currentHeader);
+						currentHeader = null;
+					}
+					if ("ITEM".equals(reader.getLocalName())) {
+						items.add(currentItem);
+						currentItem = null;
+					}
+					currentTag = null;
+				}
+			}
+
+		} catch (Exception e) {
 			throw new CustomException(ErrorCode.INVALID_XML_ERROR);
 		}
 
+		return OrderRequestDto.builder()
+			.headers(headers)
+			.items(items)
+			.build();
+	}
+
+	private void validateOrderRequest(OrderRequestDto orderRequestDto) {
 		Set<ConstraintViolation<OrderRequestDto>> violations =
 			validator.validate(orderRequestDto);
 
@@ -87,7 +162,6 @@ public class OrderService {
 				violations.iterator().next().getMessage());
 		}
 
-		return orderRequestDto;
 	}
 
 	private String nextOrderId(String id) {
@@ -118,6 +192,7 @@ public class OrderService {
 		for (ItemDto item : orderRequestDto.getItems()) {
 			HeaderDto header = headerMap.get(item.getUserId());
 			if (Objects.isNull(header)) {
+				log.debug("존재하지 않는 사용자: {}", item.getUserId());
 				throw new CustomException(ErrorCode.INVALID_ITEM_ERROR);
 			}
 			OrderPk orderPk = OrderPk.builder()
