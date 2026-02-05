@@ -4,10 +4,12 @@ public record ErrorResponse(
 	String code,
 	String message
 ) {
-	public static ErrorResponse from(ErrorCode errorCode) {
+	public static ErrorResponse from(CustomException e) {
 		return new ErrorResponse(
-			errorCode.name(),
-			errorCode.message()
+			e.getErrorCode().name(),
+			e.getDetailMessage() != null
+				? e.getDetailMessage()
+				: e.getErrorCode().message()
 		);
 	}
 }

@@ -32,7 +32,6 @@ import com.jm.orderplatform.repository.OrderRepository;
 
 import jakarta.transaction.Transactional;
 import jakarta.validation.ConstraintViolation;
-import jakarta.validation.ValidationException;
 import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,28 +51,74 @@ public class OrderService {
 	@Transactional
 	public void sendOrder(String requestBody) {
 
+		log.info("주문 적재 요청 시작");
+
 		// 요청 메시지 검증
 		OrderRequestDto orderRequestDto = validateOrder(requestBody);
 
 		// 엔티티 데이터 변환
+		List<OrderEntity> orderEntityList = makeOrderEntityList(orderRequestDto);
+
+		// 주문 정보 DB 저장
+		orderRepository.saveAll(orderEntityList);
+
+		// 주문 정보 회계 파일 전송
+		sendSftp(orderEntityList);
+
+		log.info("주문 적재 요청 성공 - 개수: {}", orderEntityList.size());
+
+	}
+
+	private OrderRequestDto validateOrder(String requestBody) {
+		XmlMapper xmlMapper = new XmlMapper();
+		OrderRequestDto orderRequestDto;
+		try {
+			orderRequestDto = xmlMapper.readValue(requestBody, OrderRequestDto.class);
+		} catch (JsonProcessingException e) {
+			throw new CustomException(ErrorCode.INVALID_XML_ERROR);
+		}
+
+		Set<ConstraintViolation<OrderRequestDto>> violations =
+			validator.validate(orderRequestDto);
+
+		if (!violations.isEmpty()) {
+			throw new CustomException(
+				ErrorCode.VALIDATION_ERROR,
+				violations.iterator().next().getMessage());
+		}
+
+		return orderRequestDto;
+	}
+
+	private String nextOrderId(String id) {
+		if (id.endsWith("999")) {
+			if (id.charAt(0) == 'Z') {
+				throw new CustomException(ErrorCode.ORDER_MAX_COUNT_ERROR);
+			}
+			return (id.charAt(0) + 1) + "000";
+		}
+		return id.charAt(0) + String.format("%03d", Integer.parseInt(id.substring(1)) + 1);
+	}
+
+	private List<OrderEntity> makeOrderEntityList(OrderRequestDto orderRequestDto) {
 		List<OrderEntity> orderEntityList = new ArrayList<>();
 
-		// 		가장 최근의 ORDER_ID 조회 후 다음 ID 생성
+		// 가장 최근의 ORDER_ID 조회 후 다음 ID 생성
 		String orderId = "A001";
 		List<OrderEntity> latestOrder = orderRepository.findLatestOrder(PageRequest.of(0, 1));
 		if (!latestOrder.isEmpty()) {
 			orderId = nextOrderId(latestOrder.get(0).getId().getOrderId());
 		}
 
-		// 		헤더(사용자) 정보 맵 생성
+		// 헤더(사용자) 정보 맵 생성
 		Map<String, HeaderDto> headerMap = orderRequestDto.getHeaders().stream()
 			.collect(Collectors.toMap(HeaderDto::getUserId, h -> h));
 
-		// 		아이템 별 주문 정보 생성
+		// 아이템 별 주문 정보 생성
 		for (ItemDto item : orderRequestDto.getItems()) {
 			HeaderDto header = headerMap.get(item.getUserId());
 			if (Objects.isNull(header)) {
-				throw new CustomException(ErrorCode.VALIDATION_ERROR);
+				throw new CustomException(ErrorCode.INVALID_ITEM_ERROR);
 			}
 			OrderPk orderPk = OrderPk.builder()
 				.orderId(orderId)
@@ -93,10 +138,10 @@ public class OrderService {
 			orderEntityList.add(orderEntity);
 		}
 
-		// 주문 정보 DB 저장
-		orderRepository.saveAll(orderEntityList);
+		return orderEntityList;
+	}
 
-		// 주문 정보 회계 파일 전송
+	private void sendSftp(List<OrderEntity> orderEntityList) {
 		StringBuilder sb = new StringBuilder();
 		for (OrderEntity e : orderEntityList) {
 			sb
@@ -112,53 +157,29 @@ public class OrderService {
 			;
 		}
 		sendSftp(sb.toString());
-
-	}
-
-	private OrderRequestDto validateOrder(String requestBody) {
-		XmlMapper xmlMapper = new XmlMapper();
-		OrderRequestDto orderRequestDto;
-		try {
-			orderRequestDto = xmlMapper.readValue(requestBody, OrderRequestDto.class);
-
-		} catch (JsonProcessingException e) {
-			throw new CustomException(ErrorCode.VALIDATION_ERROR);
-		}
-
-		Set<ConstraintViolation<OrderRequestDto>> violations =
-			validator.validate(orderRequestDto);
-
-		if (!violations.isEmpty()) {
-			throw new ValidationException(violations.toString());
-		}
-
-		return orderRequestDto;
-	}
-
-	private String nextOrderId(String id) {
-		if (id.endsWith("999")) {
-			if (id.charAt(0) == 'Z') {
-				throw new CustomException(ErrorCode.ORDER_MAX_COUNT_ERROR);
-			}
-			return (id.charAt(0) + 1) + "000";
-		}
-		return id.charAt(0) + String.format("%03d", Integer.parseInt(id.substring(1)) + 1);
 	}
 
 	private void sendSftp(String data) {
-
 		String timestamp = LocalDateTime.now()
 			.format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
-
 		String remoteFileName = "INSPIEN_김지민_" + timestamp + ".txt";
-		byte[] content = data.getBytes(StandardCharsets.UTF_8);
 
-		Message<byte[]> message = MessageBuilder
-			.withPayload(content)
-			.setHeader(FileHeaders.FILENAME, remoteFileName)
-			.build();
+		try {
 
-		sftpTemplate.send(message, FileExistsMode.REPLACE);
+			byte[] content = data.getBytes(StandardCharsets.UTF_8);
+
+			Message<byte[]> message = MessageBuilder
+				.withPayload(content)
+				.setHeader(FileHeaders.FILENAME, remoteFileName)
+				.build();
+
+			sftpTemplate.send(message, FileExistsMode.REPLACE);
+
+		} catch (Exception e) {
+			log.error("SFTP send failed. filename = {}", remoteFileName);
+			throw new CustomException(ErrorCode.EXTERNAL_SYSTEM_ERROR, e);
+		}
+
 	}
 
 }
